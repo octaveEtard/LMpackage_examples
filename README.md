@@ -1,7 +1,9 @@
 # LMpackage_examples
 Octave Etard ( octave.etard11@imperial.ac.uk )
 
-This repo contains examples illustrating the use of the [LMpackage](https://github.com/octaveEtard/LMpackage) on real EEG datasets. **Requires Matlab R2019b or newer** (tested on R2019b & R2020a).
+This repo contains examples illustrating the use of the [LMpackage](https://github.com/octaveEtard/LMpackage) on real EEG datasets.
+
+**Requires Matlab R2019b or newer** (tested on R2019b & R2020a).
 
 
 ## Quick start
