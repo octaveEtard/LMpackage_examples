@@ -7,7 +7,7 @@ This repo contains examples illustrating the use of the [LMpackage](https://gith
 ## Quick start
 
 ### Installation
-Add the `functions` folder(s) to your path. All function names start with LM_ so as to reduce the risk of shadowing any of your own functions. These examples also require the [LMpackage](https://github.com/octaveEtard/LMpackage) to be in your path, as well as some [EEGLAB](https://sccn.ucsd.edu/eeglab/index.php) functions to load the data.
+Add the `functions` folder(s) to your path. All function are prefixed with `LM_` so as to reduce the risk of shadowing any of your own functions. These examples also require the [LMpackage](https://github.com/octaveEtard/LMpackage) to be in your path, as well as some [EEGLAB](https://sccn.ucsd.edu/eeglab/index.php) functions to load the data.
 
 
 ## Content
