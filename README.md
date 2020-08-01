@@ -6,9 +6,7 @@ This repo contains examples illustrating the use of the [LMpackage](https://gith
 **Requires Matlab R2019b or newer** (tested on R2019b & R2020a).
 
 
-## Quick start
-
-### Installation
+## Installation
 Add the `functions` folder(s) to your path. All function are prefixed with `LM_` so as to reduce the risk of shadowing any of your own functions. These examples require the [LMpackage](https://github.com/octaveEtard/LMpackage) to be in your path, as well as some [EEGLAB](https://sccn.ucsd.edu/eeglab/index.php) functions to load the data.
 
 
