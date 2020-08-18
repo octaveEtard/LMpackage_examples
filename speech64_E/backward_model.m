@@ -3,15 +3,17 @@
 %
 allSID = {'YH00','YH01','YH02','YH03','YH04','YH06','YH07','YH08','YH09','YH10','YH11','YH14','YH15','YH16','YH17','YH18','YH19','YH20'};
 
-parts = 1:4;
-condition = 'clean';
-Fs = 100;
+condition = 'clean'; % single speaker 
+parts = 1:4; % EEG data divided in 4 parts
+Fs = 100; % sampling rate
 
-nChan = 64;
+nChan = 64; % 64 channel EEG
+% EEG data bandpassed between 1 - 12 Hz ; missing channels interpolated and
+% average referenced.
 procEEG = 'BP-1-12-INTP-AVR';
 
-typeEnv = 'rectified';
-procEnv = 'LP-12';
+typeEnv = 'rectified'; % envelope computed by rectifying speech signal
+procEnv = 'LP-12'; % followed by lowpass filtering below 12 Hz
 
 
 % Time region in which to derive the decoder. Time lag is understood as lag
@@ -19,7 +21,7 @@ procEnv = 'LP-12';
 % Hence, here positive time lags correspond to the causal part of the
 % decoder (response after stimulus).
 minLagT = -100e-3;
-maxLagT = 500e-3;
+maxLagT = 500e-3; % : causal part
 
 % estimate performance (CC & MSE) on windows of this duration
 % (negative = use all available data)
@@ -61,7 +63,7 @@ end
 % options passed to the call to get the appropriate matrices to fit the
 % linear model
 opt = struct();
-opt.nStimPerFile = 1;
+opt.nStimPerFile = 1; % each EEG recording corresponds to a single stimulus
 % These are loading function taking one element of stimOpt and EEGopt
 % respectively as input, and loading stimulus / EEG data.
 opt.getStimulus = @LM_loadFeature_speech64_E;
@@ -72,7 +74,7 @@ opt.getStimulus = @LM_loadFeature_speech64_E;
 opt.getResponse = @LM_loadEEG_speech64_E;
 
 % nb of features describing each stimulus
-opt.nFeatures = 1;
+opt.nFeatures = 1; % only the envelope of the target speaker
 % nb of channels in the EEG data
 opt.nChan = nChan;
 
@@ -80,9 +82,14 @@ opt.nChan = nChan;
 opt.minLag = floor(minLagT * Fs);
 opt.maxLag = ceil(maxLagT * Fs);
 
-opt.sumSub = false;
-opt.sumStim = false; % does not matter here
-opt.sumFrom = 0; % return cross matrices for each part 
+opt.sumSub = false; % whether to accumulate data over subjects
+% whether to accumulate data over the different stimuli in one file
+% does not matter here as only 1 stimulus per file
+opt.sumStim = false; 
+% accumulate data over the dimensions of stimOpt from this one.
+% Here 0 --> do not accumulate and return cross matrices for each
+% dimensions (here for each of the 4 parts) 
+opt.sumFrom = 0;
 
 % false: the predictor data (here EEG data) will be zeros padded at its
 % edges. true: no padding.
@@ -93,8 +100,6 @@ opt.removeMean = true;
 % convert to samples
 opt.nPntsPerf = ceil(tWinPerf*Fs)+1;
 
-
-nLags = opt.maxLag - opt.minLag + 1;
 
 % options to fit the model
 trainOpt = struct();
@@ -118,13 +123,17 @@ nPerfSize = numel(tWinPerf);
 CC = cell(nPerfSize,nParts,nSub);
 MSE = cell(nPerfSize,nParts,nSub);
 
-coeffs = nan(nLags,nChan,nLambda,nSub);
+nLags = opt.maxLag - opt.minLag + 1;
+coeffs = nan(nLags,nChan,nLambda,nSub); % to store the decoders
 
+
+tLoop = 0;
 for iSub = 1:nSub
-
-    % forming XtX and Xty for all data parts for iSub
-    [XtX,Xty] = LM_crossMatrices(stimOpt,EEGopt(:,iSub),opt,'backward');
+    tb = tic;
     
+    % forming XtX and Xty for all data parts for subject iSub
+    [XtX,Xty,mX,mY,N] = LM_crossMatrices(stimOpt,EEGopt(:,iSub),opt,'backward');
+
     % leave-one-part-out cross-validation for iSub
     for iTestPart = 1:nParts
         
@@ -138,12 +147,15 @@ for iSub = 1:nSub
         model_train = LM_fitLinearModel(XtX_train,Xty_train,trainOpt);
         model_train = model_train.coeffs;
         
+        mX_train = sum(N(iTrainParts) .* mX(:,iTrainParts),2) ./ sum(N(iTrainParts));
+        mY_train = sum(N(iTrainParts) .* mY(:,iTrainParts),2) ./ sum(N(iTrainParts));
+        
         % testing on the remaining part
         stim_test = stimOpt(iTestPart);
         EEG_test = EEGopt(iTestPart,iSub);
-        
+
         [ CC(:,iTestPart,iSub),...
-            MSE(:,iTestPart,iSub)] = LM_testModel(model_train,stim_test,EEG_test,opt,'backward');
+            MSE(:,iTestPart,iSub)] = LM_testModel(model_train,stim_test,EEG_test,opt,'backward',mX_train,mY_train);
     end
     
     % finally train & store decoder on all data
@@ -152,6 +164,8 @@ for iSub = 1:nSub
     model = LM_fitLinearModel(XtX,Xty,trainOpt);
     coeffs(:,:,:,iSub) = reshape(model.coeffs,[nLags,nChan,nLambda]);
     
+    tLoop = tLoop + toc(tb);
+    fprintf('\n%i / %i done, estimated remaining time: %.1f mn\n\n',iSub,nSub,(nSub-iSub)*tLoop/(60*iSub));
 end
 
 % Return a time vector associated with the coefficients, and make sure the
@@ -181,7 +195,7 @@ ax.YAxis.Label.String = 'Correlation coefficient';
 ax.Title.String = 'Regularisation curve for each subject';
 
 % regularisation coefficient
-lambda0 = 10^-0.5;
+lambda0 = 10^-0.5; % simple heuristic
 [~,iLambda0] = min(abs(trainOpt.method.lambda-lambda0));
 
 % CC for each subject @ lambda0, sorted
@@ -189,7 +203,7 @@ lambda0 = 10^-0.5;
 sCC_ = sCC(iLambda0,iSort);
 
 % corresponding decoder, averaged across subjects
-meanDecoder = mean(coeffs(:,:,iLambda0,:),3);
+meanDecoder = mean(coeffs(:,:,iLambda0,:),4);
 
 figure;
 ax = axes();
@@ -204,10 +218,7 @@ t0 = 130; % ms
 [~,it0] = min(abs(tms-t0));
 
 figure;
-topoplot(meanBestDecoder(it0,:),chanLocs);
-title(sprintf('Decoder topography at t = %i ms',t0));
-%
-% The decoder obtained for each subject at e.g. the best CC + 1 std could
-% then be used on some held out data.
+topoplot(meanDecoder(it0,:),chanLocs,'maplimits','absmax');
+title(sprintf('Mean decoder topography at t = %i ms for \\lambda_n = 10^{%.1f}',t0,log10(lambda0)));
 %
 %

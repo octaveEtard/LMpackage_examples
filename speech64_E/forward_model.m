@@ -3,22 +3,24 @@
 %
 allSID = {'YH00','YH01','YH02','YH03','YH04','YH06','YH07','YH08','YH09','YH10','YH11','YH14','YH15','YH16','YH17','YH18','YH19','YH20'};
 
-parts = 1:4;
-condition = 'clean';
-Fs = 100;
+condition = 'clean'; % single speaker 
+parts = 1:4; % EEG data divided in 4 parts
+Fs = 100; % sampling rate
 
-nChan = 64;
+nChan = 64; % 64 channel EEG
+% EEG data bandpassed between 1 - 12 Hz ; missing channels interpolated and
+% average referenced.
 procEEG = 'BP-1-12-INTP-AVR';
 
-typeEnv = 'rectified';
-procEnv = 'LP-12';
+typeEnv = 'rectified'; % envelope computed by rectifying speech signal
+procEnv = 'LP-12'; % followed by lowpass filtering below 12 Hz
 
 
 % Time region in which to derive the TRF. Time lag is understood as lag of
 % predictor (here stimulus) with respect to predicted data (here EEG).
 % Hence, here negative time lags correspond to the causal part of the TRF
 % (stimulus preceding response).
-minLagT = -1500e-3;
+minLagT = -1500e-3; % : causal part
 maxLagT = 500e-3;
 
 % estimate performance (CC & MSE) on windows of this duration
@@ -61,7 +63,7 @@ end
 % options passed to the call to get the appropriate matrices to fit the
 % linear model
 opt = struct();
-opt.nStimPerFile = 1;
+opt.nStimPerFile = 1; % each EEG recording corresponds to a single stimulus
 % These are loading function taking one element of stimOpt and EEGopt
 % respectively as input, and loading stimulus / EEG data.
 opt.getStimulus = @LM_loadFeature_speech64_E;
@@ -72,7 +74,7 @@ opt.getStimulus = @LM_loadFeature_speech64_E;
 opt.getResponse = @LM_loadEEG_speech64_E;
 
 % nb of features describing each stimulus
-opt.nFeatures = 1;
+opt.nFeatures = 1; % only the envelope of the target speaker
 % nb of channels in the EEG data
 opt.nChan = nChan;
 
@@ -80,9 +82,14 @@ opt.nChan = nChan;
 opt.minLag = floor(minLagT * Fs);
 opt.maxLag = ceil(maxLagT * Fs);
 
-opt.sumSub = false;
-opt.sumStim = false; % does not matter here
-opt.sumFrom = 0; % get all dimenions out
+opt.sumSub = false; % whether to accumulate data over subjects
+% whether to accumulate data over the different stimuli in one file
+% does not matter here as only 1 stimulus per file
+opt.sumStim = false; 
+% accumulate data over the dimensions of stimOpt from this one.
+% Here 0 --> do not accumulate and return cross matrices for each
+% dimensions (here for each of the 4 parts) 
+opt.sumFrom = 0;
 
 % false: the predictor data (here stimulus) will be zeros padded at its
 % edges. true: no padding.
@@ -97,7 +104,10 @@ opt.nPntsPerf = ceil(tWinPerf*Fs)+1;
 % Here XtX & Xty will be of size:
 % size(XtX) = [nLags,nLags,nParts]
 % size(Xty) = [nLags,nChan,nParts,nSub]
-[XtX,Xty] = LM_crossMatrices(stimOpt,EEGopt,opt,'forward');
+% [XtX,Xty] = LM_crossMatrices(stimOpt,EEGopt,opt,'forward');
+% mX & mY are the mean of the underlying X & Y matrices
+% N the number of in the underlying X & Y matrices
+[XtX,Xty,mX,mY,N] = LM_crossMatrices(stimOpt,EEGopt,opt,'forward');
 
 % options to fit the model
 trainOpt = struct();
@@ -125,17 +135,22 @@ opt.predBatchSize = nLambda;
 CC = cell(nPerfSize,nParts,nSub);
 MSE = cell(nPerfSize,nParts,nSub);
 
+tLoop = 0;
+
 for iTestPart = 1:nParts
-    
+    tb = tic;
     iTrainParts = [1:(iTestPart-1),(iTestPart+1):nParts];
     XtX_train = sum(XtX(:,:,iTrainParts),3);
+    % Fitting model without mean : learning the mean on the training data
+    % to remove it on the testing data
+    mX_train = sum(N(iTrainParts) .* mX(:,iTrainParts),2) / sum(N(iTrainParts));
     
     % For forward models where all subjects had the same stimuli, a generic
     % model trained over all subjects & stimuli is the same as the average
     % of all models trained for all stimuli and each subject independently
     %
     % We'll take advantage of this here, and train one model for all the
-    % subjects, by expanding Xty along the "channel" dimenions (since
+    % subjects, by expanding Xty along the "channel" dimension (since
     % channels are fitted independently from each other). This avoid
     % having to invert XtX_train for each subject, but requires more memory.
     % Alternatively, see below for the straightforward version.
@@ -150,20 +165,24 @@ for iTestPart = 1:nParts
         
         % --- alternatively to the above, do:
         % Xty_train = sum(Xty(:,:,iTrainParts,iTrainSub),[3,4]);
-        % model_train = LM_fitLinearModel((nSub-1)*XtX_train,Xty_train,trainOpt);
+        % model_train = LM_fitLinearModel(numel(iTrainSub)*XtX_train,Xty_train,trainOpt);
         % model_train = model_train.coeffs;
         % ---
         
         stim_test = stimOpt(iTestPart);
         EEG_test = EEGopt(iTestPart,iTestSub);
+        mY_train = sum(N(iTrainParts) .* mY(:,iTrainParts,iTrainSub),[2,3]) ./ (numel(iTrainSub)*sum(N(iTrainParts)));
         
         [ CC(:,iTestPart,iTestSub),...
-            MSE(:,iTestPart,iTestSub) ] = LM_testModel(model_train,stim_test,EEG_test,opt,'forward');
+            MSE(:,iTestPart,iTestSub) ] = LM_testModel(model_train,stim_test,EEG_test,opt,'forward',mX_train,mY_train);
     end
+    
+    tLoop = tLoop + toc(tb);
+    fprintf('\n%i / %i done, estimated remaining time: %.1f mn\n\n',iTestPart,nParts,(nParts-iTestPart)*tLoop/(60*iTestPart));
 end
 
 % finally fit one model over all the data
-XtX = nSub * sum(XtX,3);
+XtX = nSub * sum(XtX,3); % same XtX for all subjects
 Xty = sum(Xty,[3,4]);
 
 % CC / MSE can be used to choose an appropriate regularisation coefficient,
@@ -204,7 +223,7 @@ ax.YAxis.Label.String = 'MSE';
 
 %% Plotting the obtained TRF
 % regularisation coefficient for which to plot the coeffcients
-lambda0 = 10^-0.5;
+lambda0 = 10^-0.5; % simple heuristic
 [~,iLambda0] = min(abs(trainOpt.method.lambda-lambda0));
 
 figure;
@@ -217,11 +236,13 @@ ax.XAxis.Label.String = 'Time (ms)';
 ax.YAxis.Label.String = 'Ampltitude (a.u.)';
 ax.Title.String = 'TRF';
 
-%% Plotting topography
+% Plotting topography
 % time at which to plot the topography
-t0 = 150; % ms 
+t0 = 150; % ms
 [~,it0] = min(abs(tms-t0));
 
 figure;
-topoplot(coeffs(it0,:,iLambda0),chanLocs);
-title(sprintf('TRF topography at t = %i ms',t0))
+topoplot(coeffs(it0,:,iLambda0),chanLocs,'maplimits','absmax');
+title(sprintf('TRF topography at t = %i ms for \\lambda_n = 10^{%.1f}',t0,log10(lambda0)));
+%
+%
