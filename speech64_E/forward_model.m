@@ -44,7 +44,7 @@ stimOpt = cell(nParts,1);
 EEGopt = cell(nParts,nSub);
 
 % load channel location
-chanLocs = LM_loadChanLocs();
+chanLocs = LM.example.loadChanLocs();
 % define a channel order to be used for all data
 chanOrder = {chanLocs(:).labels};
 
@@ -58,7 +58,7 @@ for iPart = 1:nParts
         
         EEGopt{iPart,iSub} = {EEGFolder,EEGFileName,chanOrder};
     end
-end
+end 
 
 % options passed to the call to get the appropriate matrices to fit the
 % linear model
@@ -66,12 +66,12 @@ opt = struct();
 opt.nStimPerFile = 1; % each EEG recording corresponds to a single stimulus
 % These are loading function taking one element of stimOpt and EEGopt
 % respectively as input, and loading stimulus / EEG data.
-opt.getStimulus = @LM_loadFeature_speech64_E;
+opt.getStimulus = @LM.example.speech64E.loadFeature;
 % This function should return as 1st output a [nPnts x nChan] data matrix,
 % and as 2nd outut a vector of indices (size nStimPerFile x 1) indicating
 % where each stimulus begins in the data. These indices should be sorted in
 % the same order as the stimuli returned by opt.getStimulus.
-opt.getResponse = @LM_loadEEG_speech64_E;
+opt.getResponse = @LM.example.speech64E.loadEEG;
 
 % nb of features describing each stimulus
 opt.nFeatures = 1; % only the envelope of the target speaker
@@ -107,7 +107,7 @@ opt.nPntsPerf = ceil(tWinPerf*Fs)+1;
 % [XtX,Xty] = LM_crossMatrices(stimOpt,EEGopt,opt,'forward');
 % mX & mY are the mean of the underlying X & Y matrices
 % N the number of in the underlying X & Y matrices
-[XtX,Xty,mX,mY,N] = LM_crossMatrices(stimOpt,EEGopt,opt,'forward');
+[XtX,Xty,mX,mY,N] = LM.crossMatrices(stimOpt,EEGopt,opt,'forward');
 
 % options to fit the model
 trainOpt = struct();
@@ -155,7 +155,7 @@ for iTestPart = 1:nParts
     % having to invert XtX_train for each subject, but requires more memory.
     % Alternatively, see below for the straightforward version.
     Xty_train = reshape( sum(Xty(:,:,iTrainParts,:),3), nLags,nChan*nSub );
-    model = LM_fitLinearModel(XtX_train,Xty_train,trainOpt);
+    model = LM.fitLinearModel(XtX_train,Xty_train,trainOpt);
     model = reshape(model.coeffs,[nLags,nChan,nSub,nLambda]);
     
     for iTestSub = 1:nSub
@@ -174,7 +174,7 @@ for iTestPart = 1:nParts
         mY_train = sum(N(iTrainParts) .* mY(:,iTrainParts,iTrainSub),[2,3]) ./ (numel(iTrainSub)*sum(N(iTrainParts)));
         
         [ CC(:,iTestPart,iTestSub),...
-            MSE(:,iTestPart,iTestSub) ] = LM_testModel(model_train,stim_test,EEG_test,opt,'forward',mX_train,mY_train);
+            MSE(:,iTestPart,iTestSub) ] = LM.testModel(model_train,stim_test,EEG_test,opt,'forward',mX_train,mY_train);
     end
     
     tLoop = tLoop + toc(tb);
@@ -188,10 +188,10 @@ Xty = sum(Xty,[3,4]);
 % CC / MSE can be used to choose an appropriate regularisation coefficient,
 % and the model obtained for this regularisation coeffcient can be used
 % e.g. on held out data.
-model = LM_fitLinearModel(XtX,Xty,trainOpt);
+model = LM.fitLinearModel(XtX,Xty,trainOpt);
 % Return a time vector associated with the coefficients, and make sure the
 % causal part of the coefficients are at positive latencies.
-[tms,coeffs] = LM_getTime(opt,Fs,'forward',model.coeffs,1);
+[tms,coeffs] = LM.getTime(opt,Fs,'forward',model.coeffs,1);
 tms = 1e3 * tms; % in milliseconds
 
 %%

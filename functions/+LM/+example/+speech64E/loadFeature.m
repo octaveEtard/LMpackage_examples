@@ -1,4 +1,9 @@
-function feature = LM_loadFeature_speech64_E(c)
+function feature = loadFeature(c)
+%
+% LM.example.speech64E.loadFeature
+% Part of the Linear Model (LM) package.
+% Author: Octave Etard
+%
 % Input c is a cell containing the path towards one feature file
 % describing the stimulus
 %

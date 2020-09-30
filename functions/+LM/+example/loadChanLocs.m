@@ -1,5 +1,9 @@
-function chanLocs = LM_loadChanLocs(nbChan)
-
+function chanLocs = loadChanLocs(nbChan)
+%
+% LM.example.loadChanLocs
+% Part of the Linear Model (LM) package.
+% Author: Octave Etard
+%
 if nargin < 1
     nbChan = 64;
 end

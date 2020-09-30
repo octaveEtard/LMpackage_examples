@@ -44,7 +44,7 @@ stimOpt = cell(nParts,1);
 EEGopt = cell(nParts,nSub);
 
 % load channel location
-chanLocs = LM_loadChanLocs();
+chanLocs = LM.example.loadChanLocs();
 % define a channel order to be used for all data
 chanOrder = {chanLocs(:).labels};
 
@@ -66,12 +66,12 @@ opt = struct();
 opt.nStimPerFile = 1; % each EEG recording corresponds to a single stimulus
 % These are loading function taking one element of stimOpt and EEGopt
 % respectively as input, and loading stimulus / EEG data.
-opt.getStimulus = @LM_loadFeature_speech64_E;
+opt.getStimulus = @LM.example.speech64E.loadFeature;
 % This function should return as 1st output a [nPnts x nChan] data matrix,
 % and as 2nd outut a vector of indices (size nStimPerFile x 1) indicating
 % where each stimulus begins in the data. These indices should be sorted in
 % the same order as the stimuli returned by opt.getStimulus.
-opt.getResponse = @LM_loadEEG_speech64_E;
+opt.getResponse = @LM.example.speech64E.loadEEG;
 
 % nb of features describing each stimulus
 opt.nFeatures = 1; % only the envelope of the target speaker
@@ -132,7 +132,7 @@ for iSub = 1:nSub
     tb = tic;
     
     % forming XtX and Xty for all data parts for subject iSub
-    [XtX,Xty,mX,mY,N] = LM_crossMatrices(stimOpt,EEGopt(:,iSub),opt,'backward');
+    [XtX,Xty,mX,mY,N] = LM.crossMatrices(stimOpt,EEGopt(:,iSub),opt,'backward');
 
     % leave-one-part-out cross-validation for iSub
     for iTestPart = 1:nParts
@@ -144,7 +144,7 @@ for iSub = 1:nSub
         XtX_train = sum(XtX(:,:,iTrainParts),3);
         Xty_train = sum(Xty(:,:,iTrainParts),3);
         
-        model_train = LM_fitLinearModel(XtX_train,Xty_train,trainOpt);
+        model_train = LM.fitLinearModel(XtX_train,Xty_train,trainOpt);
         model_train = model_train.coeffs;
         
         mX_train = sum(N(iTrainParts) .* mX(:,iTrainParts),2) ./ sum(N(iTrainParts));
@@ -155,13 +155,13 @@ for iSub = 1:nSub
         EEG_test = EEGopt(iTestPart,iSub);
 
         [ CC(:,iTestPart,iSub),...
-            MSE(:,iTestPart,iSub)] = LM_testModel(model_train,stim_test,EEG_test,opt,'backward',mX_train,mY_train);
+            MSE(:,iTestPart,iSub)] = LM.testModel(model_train,stim_test,EEG_test,opt,'backward',mX_train,mY_train);
     end
     
     % finally train & store decoder on all data
     XtX = sum(XtX,3);
     Xty = sum(Xty,3);
-    model = LM_fitLinearModel(XtX,Xty,trainOpt);
+    model = LM.fitLinearModel(XtX,Xty,trainOpt);
     coeffs(:,:,:,iSub) = reshape(model.coeffs,[nLags,nChan,nLambda]);
     
     tLoop = tLoop + toc(tb);
@@ -170,7 +170,7 @@ end
 
 % Return a time vector associated with the coefficients, and make sure the
 % causal part of the coefficients are at positive latencies.
-[tms,coeffs] = LM_getTime(opt,Fs,'backward',coeffs,1);
+[tms,coeffs] = LM.getTime(opt,Fs,'backward',coeffs,1);
 tms = 1e3 * tms; % in milliseconds
 
 %%

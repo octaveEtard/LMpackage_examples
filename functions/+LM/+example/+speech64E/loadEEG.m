@@ -1,4 +1,9 @@
-function [data,iB] = LM_loadEEG_speech64_E(c)
+function [data,iB] = loadEEG(c)
+%
+% LM.example.speech64E.loadEEG
+% Part of the Linear Model (LM) package.
+% Author: Octave Etard
+%
 % Input c is a cell containing the folder path and file name of an EEG file
 % to load.
 %
@@ -24,7 +29,7 @@ iB = EEG.event(iB).latency;
 
 % data matrix, each column = 1 channel
 % make sure channels are returned in the order specified by c{3}
-data = LM_reorderMatrix(EEG.data,{EEG.chanlocs(:).labels},c{3},1)';
+data = LM.example.reorderMatrix(EEG.data,{EEG.chanlocs(:).labels},c{3},1)';
 
 end
 %
